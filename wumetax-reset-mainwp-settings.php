@@ -1,20 +1,30 @@
 <?php
 /**
  * Plugin Name: wumetax-reset-mainwp-settings
- * Description: 一次性重置 MainWP Child 設定，執行後將自動停用並刪除此外掛檔案。
- * Version: 1.1.0
+ * Description: 強制停用 MainWP Child、重置設定並在執行後自我毀滅（自動刪除）。
+ * Version: 1.2.0
  * Author: wumetax
  */
 
 defined('ABSPATH') or die('No script kiddies please!');
 
 /**
- * 核心重置與自我毀滅函式
+ * 核心執行函式
  */
-function wumetax_reset_mainwp_and_self_destruct() {
+function wumetax_mainwp_child_reset_and_destroy() {
     global $wpdb;
 
-    // 1. 刪除 options 表中所有包含 mainwp_ 的設定
+    // 1. 檢查並停用 MainWP Child 外掛（如果目前是啟動狀態）
+    if (!function_exists('is_plugin_active')) {
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+    }
+    
+    $mainwp_child_path = 'mainwp-child/mainwp-child.php';
+    if (is_plugin_active($mainwp_child_path)) {
+        deactivate_plugins($mainwp_child_path);
+    }
+
+    // 2. 清理 options 資料表
     $wpdb->query(
         $wpdb->prepare(
             "DELETE FROM {$wpdb->prefix}options WHERE option_name LIKE %s",
@@ -22,7 +32,7 @@ function wumetax_reset_mainwp_and_self_destruct() {
         )
     );
 
-    // 2. 刪除 postmeta 表中所有相關的 meta 鍵值
+    // 3. 清理 postmeta 資料表
     $wpdb->query(
         $wpdb->prepare(
             "DELETE FROM {$wpdb->prefix}postmeta WHERE meta_key LIKE %s",
@@ -30,17 +40,16 @@ function wumetax_reset_mainwp_and_self_destruct() {
         )
     );
 
-    // 3. 停用自身外掛，避免刪除檔案後 WordPress 產生錯誤提示
+    // 4. 停用自身外掛
     deactivate_plugins(plugin_basename(__FILE__));
 
-    // 4. 執行自我毀滅：刪除此 PHP 檔案
+    // 5. 自我毀滅：刪除此檔案
     if (file_exists(__FILE__)) {
         unlink(__FILE__);
     }
 }
 
 /**
- * 註冊啟用鉤子
- * 當您在後台點擊「啟用」時，會觸發上述函式
+ * 註冊啟用鉤子：點擊「啟用」時觸發
  */
-register_activation_hook(__FILE__, 'wumetax_reset_mainwp_and_self_destruct');
+register_activation_hook(__FILE__, 'wumetax_mainwp_child_reset_and_destroy');
